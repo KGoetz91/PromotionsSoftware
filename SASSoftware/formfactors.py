@@ -78,21 +78,26 @@ class Intensities:
       self.__FORM__ = formfactor
     else:
       raise TypeError('Wrong formfactor input.')
-  
+ 
+  def intent(self, q):
+    if self.__FORM__.isotropic():
+      return (self.__FORM__.form_factor(q)*
+              self.__FORM__.form_factor(q))
+    else: 
+      ff = lambda theta, phi: self.__FORM__.form_factor(q, theta, phi)
+      integrand = lambda theta, phi: ff(theta, phi)*ff(theta,phi)
+      return dblquad(integrand, 0, PI, 0, 2*PI)[0]
+      
+ 
   def intensity(self, q_range):
-    i = np.array([])
     pool = ThreadPool()
-    for q in q_range:
-      print(q)
-      if self.__FORM__.isotropic():
-        i = np.append(i, self.__FORM__.form_factor(q))
-      else:
-        def integrand(theta, phi):
-          return(self.__FORM__.form_factor(q, theta, phi)*
-                  self.__FORM__.form_factor(q, theta, phi))
-        new_i = pool.apply_async(dblquad, (integrand, 0,2*PI, 0, PI))
-        #new_i = dblquad(integrand, 0, 2*PI, 0, PI)[0]/(4*PI)
-        i = np.append(i, new_i.get()[0]/(4*PI))
+    i = [(q, pool.apply_async(self.intent, (q))) for q in q_range] 
+    #i = [(q, pool.apply_async(self.intent, (q)).get()) 
+    #     for q in q_range]
+    pool.close()
+    pool.join()
+    for q, res in i:
+      print(res.successful())
     return i
       
 if __name__ == '__main__':
