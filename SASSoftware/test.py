@@ -8,7 +8,7 @@ q_range = range(100)
 
 i = cube.intensity(q_range)
 
-print(i)
+#print(i)
 
-plt.loglog(q_range, i)
-plt.show()
+#plt.loglog(q_range, i)
+#plt.show()

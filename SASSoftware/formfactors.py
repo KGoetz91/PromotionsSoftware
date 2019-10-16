@@ -4,6 +4,7 @@ import numpy as np
 from math import sin, cos
 from math import pi as PI
 from multiprocessing.pool import ThreadPool
+from multiprocessing import Process, Queue
 
 class FormFactors:
   
@@ -79,25 +80,39 @@ class Intensities:
     else:
       raise TypeError('Wrong formfactor input.')
  
-  def intent(self, q):
+  def intent(self, q, queue):
     if self.__FORM__.isotropic():
-      return (self.__FORM__.form_factor(q)*
-              self.__FORM__.form_factor(q))
+      #return (self.__FORM__.form_factor(q)*
+              #self.__FORM__.form_factor(q))
+      queue.put((q,(self.__FORM__.form_factor(q)*
+              self.__FORM__.form_factor(q))))
     else: 
       ff = lambda theta, phi: self.__FORM__.form_factor(q, theta, phi)
       integrand = lambda theta, phi: ff(theta, phi)*ff(theta,phi)
-      return dblquad(integrand, 0, PI, 0, 2*PI)[0]
+      #return dblquad(integrand, 0, PI, 0, 2*PI)[0]
+      queue.put((q, dblquad(integrand, 0, PI, 0, 2*PI)[0]))
       
  
   def intensity(self, q_range):
-    pool = ThreadPool()
-    i = [(q, pool.apply_async(self.intent, (q))) for q in q_range] 
+    queue = Queue()
+    #pool = ThreadPool()
+    i = []
+    for q in q_range:
+      #i.append((q, pool.apply_async(self.intent,(q))))
+      p = Process(target = self.intent, args =(q, queue))
+      p.start()
+    while queue.qsize()< len(q_range):
+      print(queue.qsize())
+      wait(5)
+    #i = [(q, pool.apply_async(self.intent, (q))) for q in q_range] 
     #i = [(q, pool.apply_async(self.intent, (q)).get()) 
     #     for q in q_range]
-    pool.close()
-    pool.join()
-    for q, res in i:
-      print(res.successful())
+    #for q, res in i:
+      #print('{}: {}'.format(q, res))
+    #pool.close()
+    #pool.join()
+    #for q, res in i:
+      #print(res.successful())
     return i
       
 if __name__ == '__main__':
