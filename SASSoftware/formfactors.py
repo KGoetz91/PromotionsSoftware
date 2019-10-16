@@ -7,7 +7,7 @@ import asyncio
 
 class FormFactors:
   
-  def __init__(self, epsilon = None, volume = None, is_isotropic = False):
+  def __init__(self, epsilon = None, volume = None):
     if epsilon == None:
       self.__EPSILON__ = 0
     else:
@@ -18,26 +18,21 @@ class FormFactors:
     else:
       self.__VOLUME__ = volume
     
-    if is_isotropic:
-      self.__ISO__ = True
-    else:
-      self.__ISO__ = False
-  
   def sinc(self, x):
     return sin(x)/x
   
   def volume(self):
     return self.__VOLUME__
   
-  def isotropic(self):
-    return self.__ISO__
-  
   def form_factor(self):
     pass
   
-  def intensity(self):
+  def intensity(self, q):
     pass
   
+  def scatter(self, q_range):
+    pass
+
 class Cube(FormFactors):
   
   def __init__(self, epsilon, eta_in, eta_out, edge):
@@ -45,6 +40,7 @@ class Cube(FormFactors):
     self.__ETA_IN__ = eta_in
     self.__ETA_OUT__ = eta_out
     self.__EDGE__ = edge
+    self.__LOOP__ = asyncio.get_event_loop()
     
   def form_factor(self, q, theta, phi):
     delta_rho = self.__ETA_IN__-self.__ETA_OUT__
@@ -60,12 +56,44 @@ class Cube(FormFactors):
       return (delta_rho*v_cube*self.sinc(qx*r)
               *self.sinc(qy*r)*self.sinc(qz*r))
     
-class CubeOneShell(FormFactors):
+  @asyncio.coroutine
+  def intensity(self, q):
+    print('Calculating intensity for q: {}'.format(q))
+    ff = lambda theta, phi : self.form_factor(q, theta, phi)
+    integrand = lambda theta, phi: ff(theta, phi) * ff(theta, phi)
+    res = yield from self.__LOOP__.run_in_executor(None, dblquad, 
+                          integrand, 0, PI/2, 0, PI/2)
+    res = 8*res[0]
+    print('q: {}, int: {}'.format(q, res))
+    return (q, res)
+  
+  #async def count_tasks(self, tasks):
+    #while True:
+      #asyncio.sleep(1)
+      #i = 0
+      #for task in tasks:
+        #if not task.done():
+          #i += 1
+      #if i == 0:
+        #break
+      #print('{} calculations still running.'.format(i))
+    #return 0
+    
+  def scatter(self, q_range):
+    tasks = []
+    for q in q_range:
+      tasks.append(asyncio.async(self.intensity(q)))
+    result = self.__LOOP__.run_until_complete(
+                                        asyncio.gather(*tasks))
+    return result
+    
+    
+class CubeOneShell(Cube):
   
   def __init__(self, epsilon, eta_cube, eta_shell, eta_solv,
                edge_cube, t_shell):
-    volume = (edge_cube+t_shell)**3
-    super().__init__(epsilon, volume)
+    super().__init__(epsilon, eta_cube, eta_solv,
+                     edge_cube+t_shell)
     self.core = Cube(epsilon, eta_cube, eta_shell, edge_cube)
     self.shell = Cube(epsilon, eta_shell, eta_solv,
                       edge_cube+t_shell)
@@ -74,39 +102,5 @@ class CubeOneShell(FormFactors):
     return (self.core.form_factor(q, theta, phi)
             + self.shell.form_factor(q, theta, phi))
 
-class Intensities:
-  
-  def __init__(self, formfactor):
-    if isinstance(formfactor, FormFactors):
-      self.__FORM__ = formfactor
-    else:
-      raise TypeError('Wrong formfactor input.')
- 
-  @asyncio.coroutine
-  def intent(self, q, loop):
-    print('Started calculation q: {}'.format(q))
-    if self.__FORM__.isotropic():
-      res = (q, (self.__FORM__.form_factor(q)*
-              self.__FORM__.form_factor(q)))
-      print('Finished calculation q: {} int: {}'.format(q, res[1]))
-      return res
-    else: 
-      ff = lambda theta, phi: self.__FORM__.form_factor(q, theta, phi)
-      integrand = lambda theta, phi: ff(theta, phi)*ff(theta,phi)
-      res = yield from loop.run_in_executor(None, dblquad,
-                        integrand, 0, PI/2, 0, PI/2)
-      res = res[0]
-      print('Finished calculation q: {} int: {}'.format(q, res))
-      return (q, 8*res)
-      
- 
-  def intensity(self, q_range):
-    tasks = []
-    loop = asyncio.get_event_loop()
-    for q in q_range:
-      tasks.append(asyncio.async(self.intent(q, loop)))
-    result = loop.run_until_complete(asyncio.gather(*tasks))
-    return result
-      
 if __name__ == '__main__':
   print('There will be help.')
