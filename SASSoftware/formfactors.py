@@ -3,8 +3,7 @@ from scipy.integrate import dblquad
 import numpy as np
 from math import sin, cos
 from math import pi as PI
-from multiprocessing.pool import ThreadPool
-from multiprocessing import Process, Queue
+import asyncio
 
 class FormFactors:
   
@@ -34,6 +33,9 @@ class FormFactors:
     return self.__ISO__
   
   def form_factor(self):
+    pass
+  
+  def intensity(self):
     pass
   
 class Cube(FormFactors):
@@ -80,40 +82,31 @@ class Intensities:
     else:
       raise TypeError('Wrong formfactor input.')
  
-  def intent(self, q, queue):
+  @asyncio.coroutine
+  def intent(self, q, loop):
+    print('Started calculation q: {}'.format(q))
     if self.__FORM__.isotropic():
-      #return (self.__FORM__.form_factor(q)*
-              #self.__FORM__.form_factor(q))
-      queue.put((q,(self.__FORM__.form_factor(q)*
-              self.__FORM__.form_factor(q))))
+      res = (q, (self.__FORM__.form_factor(q)*
+              self.__FORM__.form_factor(q)))
+      print('Finished calculation q: {} int: {}'.format(q, res[1]))
+      return res
     else: 
       ff = lambda theta, phi: self.__FORM__.form_factor(q, theta, phi)
       integrand = lambda theta, phi: ff(theta, phi)*ff(theta,phi)
-      #return dblquad(integrand, 0, PI, 0, 2*PI)[0]
-      queue.put((q, dblquad(integrand, 0, PI, 0, 2*PI)[0]))
+      res = yield from loop.run_in_executor(None, dblquad,
+                        integrand, 0, PI/2, 0, PI/2)
+      res = res[0]
+      print('Finished calculation q: {} int: {}'.format(q, res))
+      return (q, 8*res)
       
  
   def intensity(self, q_range):
-    queue = Queue()
-    #pool = ThreadPool()
-    i = []
+    tasks = []
+    loop = asyncio.get_event_loop()
     for q in q_range:
-      #i.append((q, pool.apply_async(self.intent,(q))))
-      p = Process(target = self.intent, args =(q, queue))
-      p.start()
-    while queue.qsize()< len(q_range):
-      print(queue.qsize())
-      wait(5)
-    #i = [(q, pool.apply_async(self.intent, (q))) for q in q_range] 
-    #i = [(q, pool.apply_async(self.intent, (q)).get()) 
-    #     for q in q_range]
-    #for q, res in i:
-      #print('{}: {}'.format(q, res))
-    #pool.close()
-    #pool.join()
-    #for q, res in i:
-      #print(res.successful())
-    return i
+      tasks.append(asyncio.async(self.intent(q, loop)))
+    result = loop.run_until_complete(asyncio.gather(*tasks))
+    return result
       
 if __name__ == '__main__':
   print('There will be help.')
