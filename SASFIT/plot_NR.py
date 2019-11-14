@@ -26,9 +26,15 @@ if __name__ == '__main__':
   fn = sys.argv[1]
   mode = sys.argv[2]
   data = load_data(fn)
-  rc('font', **{'family': 'serif', 'serif':['Helvetica']})
+  rc('font', **{'family': 'serif', 'serif':['Helvetica'], 'size':60})
   rc('text', usetex = True)
-  fig, axes = plt.subplots()
+  rc('axes', lw = 5)
+  rc('xtick.major', size = 20, width = 5)
+  rc('xtick.minor', size = 16, width = 4)
+  rc('ytick.major', size = 20, width = 5)
+  rc('ytick.minor', size = 16, width = 4)
+
+  fig, axes = plt.subplots(figsize =(30,30))
   
   print(data)
   if mode == 'fit':
@@ -37,7 +43,7 @@ if __name__ == '__main__':
     axes.set_xlabel(r'Q [$\AA^{-1}$]')
     axes.set_ylabel(r'Int [a.u.]')
   if mode == 'nr':
-    axes.plot(data[0][0], np.multiply(np.array(data[1][0]), np.power(np.array(data[0][0]),3)))
+    axes.plot(data[0][0], np.multiply(np.array(data[1][0]), np.power(np.array(data[0][0]),3)), lw=10)
     axes.set_xlabel(r'Particle radius [nm]')
     axes.set_ylabel(r'N(r)*r$^3$ [nm$^3$]')
     

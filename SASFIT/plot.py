@@ -17,9 +17,7 @@ def load_data(fn):
         for i in range(fields):
           xs.append([])
           ys.append([])
-        print(xs)
       for i in range(fields):
-        print(4*i)
         xs[i].append(float(data[4*i]))
         ys[i].append(float(data[(4*i)+1]))
 
@@ -29,13 +27,19 @@ if __name__ == '__main__':
   fn = sys.argv[1]
   mode = sys.argv[2]
   data = load_data(fn)
-  rc('font', **{'family': 'serif', 'serif':['Helvetica']})
+  rc('font', **{'family': 'serif', 'serif':['Helvetica'], 'size':60})
   rc('text', usetex = True)
-  fig, axes = plt.subplots()
+  rc('axes', lw = 5)
+  rc('xtick.major', size = 20, width = 5)
+  rc('xtick.minor', size = 16, width = 4)
+  rc('ytick.major', size = 20, width = 5)
+  rc('ytick.minor', size = 16, width = 4)
+
+  fig, axes = plt.subplots(figsize=(30,30))
   
   if mode == 'fit':
-    axes.loglog(data[0][1], data[1][1], 'bo', label = 'Small Particles')
-    axes.loglog(data[0][0], data[1][0], label = 'fit', lw = 2, c = 'black')
+    axes.loglog(data[0][1], data[1][1], 'bx',ms = 20, label = 'Small Particles')
+    axes.loglog(data[0][0], data[1][0], label = 'fit', lw = 10, c = 'black')
     axes.set_xlabel(r'Q [$\AA^{-1}$]')
     axes.set_ylabel(r'Int [a.u.]')
   if mode == 'nr':
@@ -43,5 +47,5 @@ if __name__ == '__main__':
     
   ofn = fn.split('.')[0]+'.png'
   print(ofn)
-  #plt.savefig(ofn)
-  plt.show()
+  plt.savefig(ofn)
+  #plt.show()
