@@ -47,22 +47,23 @@ if __name__ == '__main__':
   files = range(firstnumber,lastnumber+1, 1)
   data = []
   for i in files:
+    print(i)
     result = load_uvVis('{}_{:03d}.txt'.format(path,i))
     for key in result.keys():
       data.append(result[key])
   
-  #outp = open('{}_{}-{}_fitResult_mediumPeak.dat'.format(path, firstnumber, lastnumber), 'w')
-  #outp = open('{}_{}-{}_fitResult_mediumPeak.dat'.format(path, firstnumber, lastnumber), 'w')
-  outp = open('{}_{}-{}_fitResult_LargePeak.dat'.format(path, firstnumber, lastnumber), 'w')
+  outp = open('{}_{}-{}_fitResult_mediumPeak.dat'.format(path, firstnumber, lastnumber), 'w')
+  #outp = open('{}_{}-{}_fitResult_LargePeak.dat'.format(path, firstnumber, lastnumber), 'w')
+  #outp = open('{}_{}-{}_fitResult_SmallPeak.dat'.format(path, firstnumber, lastnumber), 'w')
   
   for dset in data:
     plt.clf()
     #starting_values = [420, 10, 30, -0.0005, 0.26] #large Peak
-    #starting_values = [550, 10, 30, -0.0005, 0.26] #medium peak
-    starting_values = [585, 10, 30, -0.0005, 0.26] #small peak
-    #x_fit = [x if x >= 490 and x <= 620 else 0 for x in dset['x']]  # Medium Peak
+    starting_values = [550, 10, 30, -0.0005, 0.26] #medium peak
+    #starting_values = [585, 10, 30, -0.0005, 0.26] #small peak
+    x_fit = [x if x >= 490 and x <= 620 else 0 for x in dset['x']]  # Medium Peak
     #x_fit = [x if x >= 350 and x <= 490 else 0 for x in dset['x']] # Large Peak
-    x_fit = [x if x >= 570 and x <= 650 else 0 for x in dset['x']]  # Small Peak
+    #x_fit = [x if x >= 570 and x <= 650 else 0 for x in dset['x']]  # Small Peak
     y_fit=np.array(dset['y'])[np.nonzero(x_fit)]
     x_fit=np.array(x_fit)[np.nonzero(x_fit)]
     fit_result = fit(fitfunc, x_fit, y_fit, starting_values)
