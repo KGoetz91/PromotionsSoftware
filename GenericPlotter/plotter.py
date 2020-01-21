@@ -4,6 +4,10 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
+from scipy.optimize import curve_fit as fit
+
+def line(x, m, t):
+    return np.multiply(x,m)+t
 
 def load_data(fn):
   result = []
@@ -66,15 +70,23 @@ def loadRAS(fn):
 
   return datasets
 
+def fit_line(starting_values, xval, yval)
+    fitfunc = lambda x, m:line(x,m,0) 
+    fit_result = fit(fitfunc, x_fit, y_fit, starting_values)
+    print(fit_result)
+    return fit_result
+
+
 if __name__ == '__main__':
   
   fn = sys.argv[1]
   #hist = sys.argv[2]
   
-  data = loadRAS(fn)
-  qval = data[0].get('x_val')
-  qval = np.multiply(qval,(np.pi)/(360))
-  qval = np.multiply(np.sin(qval),(4*np.pi)/0.15406)
+  data = load_data(fn)
+  linefit = fit_line([2], data[0], data[1])
+  #qval = data[0].get('x_val')
+  #qval = np.multiply(qval,(np.pi)/(360))
+  #qval = np.multiply(np.sin(qval),(4*np.pi)/0.15406)
   #diams = load_TEM_data(hist)
   #diams = np.divide(diams,2)
   #inten = np.multiply(data[1], np.power(data[0],3))
@@ -92,7 +104,7 @@ if __name__ == '__main__':
   plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
   plt.ylabel(r'Intensity [a.u.]')
   plt.xlabel(r'Q [nm$^{-1}$]')
-  plt.plot(qval,data[0].get('data'), label='Particle Core Radius')
+  plt.plot(data[0], data[1], label='Peak at ')
   #plt.hist(diams, bins=10, label='TEM Histogram')
   #plt.loglog(data[4],data[5], 'ro', label='SAXS Data')
   #plt.loglog(data[8],data[9], label='SANS Fit')
