@@ -18,19 +18,20 @@ fitfunc = lambda x, x0, sigma, amplitude, m, t : gauss(x, x0, sigma, amplitude)+
 def load_uvVis(fn):
   
   result = {}
-  
+  wlctr = 1000
   with open(fn, 'r') as f:
     for ctr, line in enumerate(f):
-      if ctr > 6:
-        x, time, i = line.split()
-        x = x.replace(',', '.')
-        i = i.replace(',', '.')
+      data = line.strip().split()
+      if data[0] == 'nm':
+        wl = data[1:]
+        wl = [float(x.replace(',','.')) for x in wl]
+        wlctr = ctr
+      if ctr > wlctr:
+        time = float(data[0])
+        intensity = data[1:]
+        intensity = [float(x.replace(',','.')) for x in intensity]
         
-        if time in result.keys():
-          result[time]['x'].append(float(x))
-          result[time]['y'].append(float(i))
-        else:
-          result[time] = {'x': [float(x)], 'y': [float(i)]}
+        result[time] = {'x': wl, 'y': intensity}
   return result
 
 if __name__ == '__main__':
@@ -46,7 +47,7 @@ if __name__ == '__main__':
   files = range(firstnumber,lastnumber+1, 1)
   data = []
   for i in files:
-    result = load_uvVis('{}_{:03d}.dat'.format(path,i))
+    result = load_uvVis('{}_{:03d}.txt'.format(path,i))
     for key in result.keys():
       data.append(result[key])
   
@@ -56,8 +57,8 @@ if __name__ == '__main__':
   
   for dset in data:
     plt.clf()
-    starting_values = [420, 10, 30, -0.0005, 0.26] #large peak
-    starting_values = [545, 10, 30, -0.0005, 0.26] #medium peak
+    #starting_values = [420, 10, 30, -0.0005, 0.26] #large Peak
+    #starting_values = [550, 10, 30, -0.0005, 0.26] #medium peak
     starting_values = [585, 10, 30, -0.0005, 0.26] #small peak
     #x_fit = [x if x >= 490 and x <= 620 else 0 for x in dset['x']]  # Medium Peak
     #x_fit = [x if x >= 350 and x <= 490 else 0 for x in dset['x']] # Large Peak
