@@ -70,9 +70,9 @@ def loadRAS(fn):
 
   return datasets
 
-def fit_line(starting_values, xval, yval)
+def fit_line(starting_values, xval, yval):
     fitfunc = lambda x, m:line(x,m,0) 
-    fit_result = fit(fitfunc, x_fit, y_fit, starting_values)
+    fit_result = fit(fitfunc, xval, yval, starting_values)
     print(fit_result)
     return fit_result
 
@@ -102,15 +102,16 @@ if __name__ == '__main__':
   
   #ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
   plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-  plt.ylabel(r'Intensity [a.u.]')
-  plt.xlabel(r'Q [nm$^{-1}$]')
-  plt.plot(data[0], data[1], label='Peak at ')
+  plt.ylabel(r'Peak Area [nm*AU]')
+  plt.xlabel(r'Concentration of Co-MCTPP [$\mu$M]')
+  plt.plot(data[0], data[1], 'ro', label='Peak at 590 nm', c='grey')
+  plt.plot(data[0], line(data[0], linefit[0][0],0), c = 'grey')
   #plt.hist(diams, bins=10, label='TEM Histogram')
   #plt.loglog(data[4],data[5], 'ro', label='SAXS Data')
   #plt.loglog(data[8],data[9], label='SANS Fit')
   #plt.loglog(data[12],data[13], 'bo', label='SANS Data')
-  #plt.legend()
-  plt.xlim(10,37) 
+  plt.legend()
+  #plt.xlim(10,37) 
   #plt.ylim(400,1600)
   
   #plt.show()

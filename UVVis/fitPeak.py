@@ -50,14 +50,14 @@ if __name__ == '__main__':
     for key in result.keys():
       data.append(result[key])
   
+  outp = open('{}_{}-{}_fitResult_SmallPeak.dat'.format(path, firstnumber, lastnumber), 'w')
   #outp = open('{}_{}-{}_fitResult_mediumPeak.dat'.format(path, firstnumber, lastnumber), 'w')
-  #outp = open('{}_{}-{}_fitResult_mediumPeak.dat'.format(path, firstnumber, lastnumber), 'w')
-  outp = open('{}_{}-{}_fitResult_LargePeak.dat'.format(path, firstnumber, lastnumber), 'w')
+  #outp = open('{}_{}-{}_fitResult_LargePeak.dat'.format(path, firstnumber, lastnumber), 'w')
   
   for dset in data:
     plt.clf()
-    starting_values = [420, 10, 30, -0.0005, 0.26] #large peak
-    starting_values = [545, 10, 30, -0.0005, 0.26] #medium peak
+    #starting_values = [420, 10, 30, -0.0005, 0.26] #large peak
+    #starting_values = [545, 10, 30, -0.0005, 0.26] #medium peak
     starting_values = [585, 10, 30, -0.0005, 0.26] #small peak
     #x_fit = [x if x >= 490 and x <= 620 else 0 for x in dset['x']]  # Medium Peak
     #x_fit = [x if x >= 350 and x <= 490 else 0 for x in dset['x']] # Large Peak
