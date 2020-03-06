@@ -9,6 +9,19 @@ from scipy.optimize import curve_fit as fit
 def line(x, m, t):
     return np.multiply(x,m)+t
 
+
+def sticky_potential(r, RHS, tau, delta, fp):
+  result = np.array([])
+  for x in r:
+    if x > 0 and x <= RHS:
+      result = np.append(result,np.inf)
+    elif x > RHS and x < RHS+delta:
+      result = np.append(result,np.log((12*tau*delta)/(RHS+delta)))
+    elif x >= RHS+delta:
+      result = np.append(result,0)
+  print(result)
+  return result
+
 def load_data(fn):
   result = []
   with open(fn, 'r') as f:
@@ -79,11 +92,14 @@ def fit_line(starting_values, xval, yval):
 
 if __name__ == '__main__':
   
-  fn = sys.argv[1]
+  #fn = sys.argv[1]
   #hist = sys.argv[2]
   
-  data = load_data(fn)
-  linefit = fit_line([2], data[0], data[1])
+  #data = load_data(fn)
+  data = np.array(range(0,1000,1))
+  data = np.divide(data,200.)
+  values = sticky_potential(data, 1.54497, 8.64125, 1.99228, 0.0664276)
+  #linefit = fit_line([2], data[0], data[1])
   #qval = data[0].get('x_val')
   #qval = np.multiply(qval,(np.pi)/(360))
   #qval = np.multiply(np.sin(qval),(4*np.pi)/0.15406)
@@ -102,10 +118,13 @@ if __name__ == '__main__':
   
   #ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
   plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-  plt.ylabel(r'Peak Area [nm*AU]')
-  plt.xlabel(r'Concentration of Co-MCTPP [$\mu$M]')
-  plt.plot(data[0], data[1], 'ro', label='Peak at 590 nm', c='grey')
-  plt.plot(data[0], line(data[0], linefit[0][0],0), c = 'grey')
+  #plt.ylabel(r'Peak Area [nm*AU]')
+  plt.ylabel(r'Distance from core [nm]')
+  #plt.xlabel(r'Concentration of Co-MCTPP [$\mu$M]')
+  plt.xlabel(r'$\frac{U}{k_B\cdot T}$ [a.u.]')
+  plt.plot(data, values, label='Sticky potential', c='grey')
+  #plt.plot(data[0], data[1], 'ro', label='Peak at 590 nm', c='grey')
+  #plt.plot(data[0], line(data[0], linefit[0][0],0), c = 'grey')
   #plt.hist(diams, bins=10, label='TEM Histogram')
   #plt.loglog(data[4],data[5], 'ro', label='SAXS Data')
   #plt.loglog(data[8],data[9], label='SANS Fit')
@@ -114,5 +133,5 @@ if __name__ == '__main__':
   #plt.xlim(10,37) 
   #plt.ylim(400,1600)
   
-  #plt.show()
-  plt.savefig('{}.png'.format(fn[:-4]))
+  plt.show()
+  #plt.savefig('{}.png'.format(fn[:-4]))
