@@ -3,6 +3,7 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+#import matplotlib.rcParams as pltParams
 from matplotlib.ticker import FormatStrFormatter
 from scipy.optimize import curve_fit as fit
 
@@ -80,38 +81,47 @@ def fit_line(starting_values, xval, yval):
 if __name__ == '__main__':
   
   fn = sys.argv[1]
-  #hist = sys.argv[2]
+  hist = sys.argv[2]
   
-  data = load_data(fn)
-  linefit = fit_line([2], data[0], data[1])
+  data = load_sasfit_data(fn)
+  #linefit = fit_line([2], data[0], data[1])
   #qval = data[0].get('x_val')
   #qval = np.multiply(qval,(np.pi)/(360))
   #qval = np.multiply(np.sin(qval),(4*np.pi)/0.15406)
-  #diams = load_TEM_data(hist)
-  #diams = np.divide(diams,2)
-  #inten = np.multiply(data[1], np.power(data[0],3))
-  #inten = np.multiply(np.divide(inten, np.amax(inten)),38)
+  diams = load_TEM_data(hist)
+  diams = np.divide(diams,2)
+  inten = np.multiply(data[1], np.power(data[0],3))
+  inten = np.multiply(np.divide(inten, np.amax(inten)),38)
   
   
-  plt.style.use('ggplot')
-  plt.rcParams.update({'font.size':22})
-  figure, ax = plt.subplots(figsize=(14,8))
+  #plt.style.use('ggplot')
+  plt.rcParams.update({'font.size':30})
+  plt.rcParams.update({'axes.linewidth':8})
+  #plt.rcParams.update({'ticks.linewidth':8})
+  figure, ax = plt.subplots(figsize=(14,14))
+  
+  ax.tick_params(length=16, width = 8, pad=10)
+  figure.subplots_adjust(left=0.2)
   
   #print(data[6])
   #print(data[7])
   
   #ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
   plt.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-  plt.ylabel(r'Peak Area [nm*AU]')
-  plt.xlabel(r'Concentration of Co-MCTPP [$\mu$M]')
-  plt.plot(data[0], data[1], 'ro', label='Peak at 590 nm', c='grey')
-  plt.plot(data[0], line(data[0], linefit[0][0],0), c = 'grey')
-  #plt.hist(diams, bins=10, label='TEM Histogram')
+  plt.xlabel(r'R (nm)')
+  plt.ylabel(r'N(R)*R$^3$ (a.u.)')
+  #print(data[0])
+  #print(data[1])
+  plt.plot(data[0], inten, label='Particle Core Radius', c='red')
+  #plt.plot(data[0], line(data[0], linefit[0][0],0), c = 'grey')
+  plt.hist(diams, bins=10, label='TEM Histogram')
   #plt.loglog(data[4],data[5], 'ro', label='SAXS Data')
-  #plt.loglog(data[8],data[9], label='SANS Fit')
+  #plt.loglog(data[8],data[9], label='SANS Fit', c='blue')
   #plt.loglog(data[12],data[13], 'bo', label='SANS Data')
-  plt.legend()
-  #plt.xlim(10,37) 
+  leg = plt.legend(markerscale = 3.)
+  for legobj in leg.legendHandles:
+    legobj.set_linewidth(10.0)
+  plt.xlim(0,10) 
   #plt.ylim(400,1600)
   
   #plt.show()
