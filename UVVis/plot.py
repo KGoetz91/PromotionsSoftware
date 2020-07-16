@@ -31,15 +31,23 @@ def load_uvVis(fn):
   y = np.divide(y, len(result))  
   return (x, y)
 
+def saveUVVis(data,ofn):
+  with open(ofn, 'w') as f:
+    for x,y in data:
+      f.write('{} {}\n'.format(x,y))
+
 
 if __name__ == '__main__':
 
   fn_dt = sys.argv[1]
-  fn_bg = sys.argv[2]
-  factor = float(sys.argv[3])
+  #fn_bg = sys.argv[2]
+  #factor = float(sys.argv[3])
   data = load_uvVis(fn_dt)
-  bg = load_uvVis(fn_bg)
+  ofn = fn_dt.split('.')[0]+'_gnu.dat'
+  print(ofn)
+  saveUVVis(zip(data[0],data[1]), ofn)
+  #bg = load_uvVis(fn_bg)
   
-  plt.plot(data[0], data[1])
-  plt.plot(bg[0], np.multiply(bg[1], factor))
-  plt.show()
+  #plt.plot(data[0], data[1])
+  #plt.plot(bg[0], np.multiply(bg[1], factor))
+  #plt.show()
