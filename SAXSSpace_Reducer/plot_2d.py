@@ -20,15 +20,8 @@ def load_2d(fn):
   
   for data in files:
     im = Image.open(data)
-    if not len(result)>0:
-      result = np.array(im)
-    else:
-      result = np.add(result, np.array(im))
+      result.append(np.array(im))
   
-  print(np.sum(result))
-  plt.imshow((result))
-  #plt.imshow(np.log(result))
-  plt.show()
   return result
 
 
@@ -39,12 +32,21 @@ if __name__ == '__main__':
                       metavar='PATH')
   parser.add_argument('inputfiles', nargs='+', type=str, help='Path to where the files are.',
                       metavar='INPUTFILES')
+  parser.add_argument('-m', '--mode', type=str, choices=['mean','each'],
+                      help='Plot mode. Either <mean> or <each>. Default is mean.', default ='mean')
+  parser.add_argument('-l', '--log', type=bool, help='Plot with log scale.', default=False, 
+                      const=True, nargs='?')
 
   args = parser.parse_args()
-
+  print(args)
   path = args.path[0]
   files = args.inputfiles
   
+  images = []
+  
   for fn in files:
-    load_2d(join(path,fn))
+    if args.mode == 'mean':
+      images.append(load_2d(join(path,fn)))
+  
+  if 
   
