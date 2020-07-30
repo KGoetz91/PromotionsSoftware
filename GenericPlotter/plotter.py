@@ -10,6 +10,8 @@ from scipy.optimize import curve_fit as fit
 def line(x, m, t):
     return np.multiply(x,m)+t
 
+def TOFTOF_qspace(theta_min, theta_max, E_i)
+
 
 def sticky_potential(r, RHS, tau, delta, fp):
   result = np.array([])
