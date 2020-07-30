@@ -90,12 +90,18 @@ class DataSet:
   
   def _create_mask(self):
     mask = np.array(self._twoddata)
+    #y = 388
+    #x = 398
+    #print(mask[x,y])
+    #print(mask[x-2:x+2,y-2:y+2])
     mask[mask >= 0] = 0
     mask[mask < 0] = 1
-    mask[666,388] = 1
-    mask[764,409] = 1
-    mask[1006,274] = 1
-    mask[int(self._com[0]):]=1
+    mask[300,409] = 1
+    mask[398,388] = 1
+    #mask[666,388] = 1
+    #mask[764,409] = 1
+    #mask[1006,274] = 1
+    mask[:int(self._com[0])]=1
     #np.save('mask.npy', mask)
     if self._VERBOSE:
       plt.imshow(np.log10(np.multiply(self._twoddata,np.multiply(-1,np.subtract(mask,1)))))
@@ -118,23 +124,33 @@ class DataSet:
       of.write('Wavelength: 1.5406e-10\n')
 
   def _integrateoned(self,distance, outp):
-    mask = np.load('mask.npy')
     self._write_poni(distance)
     ai = pyFAI.load(self._CALIB)
     res1000 = ai.integrate1d(self._twoddata, 1000, unit='q_nm^-1', mask = self._mask, 
                          filename='{}_1000bins.dat'.format(outp), error_model = 'poisson')
-    res = ai.integrate1d(self._twoddata, 100, unit='q_nm^-1', mask = mask, 
+    res = ai.integrate1d(self._twoddata, 100, unit='q_nm^-1', mask = self._mask, 
                          filename='{}_100bins.dat'.format(outp), error_model = 'poisson')
-    res = ai.integrate1d(self._twoddata, 200, unit='q_nm^-1', mask = mask,
+    res = ai.integrate1d(self._twoddata, 200, unit='q_nm^-1', mask = self._mask,
                          filename='{}_200bins.dat'.format(outp), error_model = 'poisson')
     return res1000
 
   def __init__(self, params):
     self._CALIB = 'temp.poni'
     self._VERBOSE = params['verbose']
+    
+    self._paramlist = ['cf', 'thickness', 'path', 'distance', 'output']
+    for i in self._paramlist:
+      if not i in params:
+        raise ValueError('Parmeters need the following components: {}'.format(self._paramlist)) 
+    
     self._twoddata = self._load_data(params['path'])
+    
     self._com = self._find_direct_beam() 
     self._mask = self._create_mask() 
+    
+    self._imagesum = np.sum(np.multiply(self._twoddata,np.multiply(-1,np.subtract(self._mask,1))))
+    self._twoddata = np.multiply(self._twoddata, params['cf']/(self._imagesum*params['thickness']))
+    
     self._oneddata = self._integrateoned(params['distance'], params['output'])
     
   def image(self):
@@ -157,7 +173,7 @@ class DataSet:
 
 class Calibrator:
   __DIST__ = 0.3075
-  __CF__ = 1
+  __CF__ = 14.5e7
  
   def _init_parameters(self, params):
     parser = argparse.ArgumentParser(description=
@@ -178,7 +194,7 @@ class Calibrator:
     parser.add_argument('-s', type=float, help='Sample thickness. Default is 1 mm.',
                         default=1)
     parser.add_argument('-i0', type=float, 
-                        help='Flux of the incoming beam in counts per second. Default is 1.', default=1)
+                        help='Flux of the incoming beam in counts per second. Default is 1.', default=2.54e6)
     parser.add_argument('-v', '--verbose', type=bool, help='Show plots during calibration routine.',
                         default=False, const=True, nargs='?')
     parser.add_argument('-p', '--param', type=bool, help='Use a parameter file for INPUTFILES.',
@@ -208,6 +224,8 @@ class Calibrator:
         params['path'] = join(self._PATH, fn) 
         params['distance'] = self._DIST 
         params['output'] = join(self._PATH, fn, self._OUTPUT) 
+        params['cf'] = self._CF
+        params['thickness'] = self._THICK
         self._datasets.append(DataSet(params))
  
   def __init__(self, params):
