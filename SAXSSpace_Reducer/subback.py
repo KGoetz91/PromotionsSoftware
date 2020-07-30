@@ -140,11 +140,16 @@ if __name__ == '__main__':
   for fn in files:
     filenm = join(path,fn)
     outp = '{}_{}.dat'.format(filenm[:-4],args.o) 
+    print(outp)
     data = load_data(filenm)
     bgdata = load_data(bgfn)
     bgspline = spline_data(data[0], bgdata)
     
     result = subtract(bgspline, data, args.f)
+    result_transp = np.transpose(np.array(result))
+    with open(outp, 'w') as of:
+      for data in result_transp:
+        of.write('{} {} {}\n'.format(data[0],data[1],data[2]))
     plt.loglog(data[0],data[1])
     plt.loglog(bgspline[0],np.multiply(bgspline[1],args.f))
     plt.loglog(result[0], result[1])
