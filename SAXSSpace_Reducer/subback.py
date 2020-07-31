@@ -145,12 +145,15 @@ if __name__ == '__main__':
     bgdata = load_data(bgfn)
     bgspline = spline_data(data[0], bgdata)
     
+    plt.loglog(data[0],data[1])
+    plt.loglog(bgspline[0],np.multiply(bgspline[1],args.f))
+    
     result = subtract(bgspline, data, args.f)
     result_transp = np.transpose(np.array(result))
+    
+    plt.loglog(result[0], result[1])
+    plt.show()
+    
     with open(outp, 'w') as of:
       for data in result_transp:
         of.write('{} {} {}\n'.format(data[0],data[1],data[2]))
-    plt.loglog(data[0],data[1])
-    plt.loglog(bgspline[0],np.multiply(bgspline[1],args.f))
-    plt.loglog(result[0], result[1])
-    plt.show()
