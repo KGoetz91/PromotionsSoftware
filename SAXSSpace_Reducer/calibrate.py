@@ -16,8 +16,69 @@ from scipy import ndimage
 
 import argparse
 
-class DataSet:
+class Masks:
+  def _saxans(self, data):
+    mask = np.array(data)
+    mask[mask >= 0] = 0 
+    mask[mask < 0] = 1 
+    mask[666,388] = 1 
+    mask[764,409] = 1 
+    mask[1006,274] = 1 
+    
+    return mask
+
+  def _saxspace(self, data):
+    mask = np.array(self._twoddata)
+    #y = 388
+    #x = 398
+    #print(mask[x,y])
+    #print(mask[x-2:x+2,y-2:y+2])
+    mask[mask >= 0] = 0
+    mask[mask < 0] = 1
+    mask2 = np.array(mask)
+    
+    radius = 30
+    alpha = 45
+    coordinates = []
+    for x in range(-radius, radius, 1):
+      for y in range(-radius, radius, 1):
+        if x*x+y*y<=radius*radius:
+          if (x>0) or (abs(y) > abs(x*np.tan(alpha*np.pi/180))):
+            coordinates.append((x,y))
+        
+    coordinates = [(x+int(self._com[0])+1,y+int(self._com[1])) for (x,y) in coordinates]
+    for (x,y) in coordinates:
+      mask2[x,y] = 1000
+      
+    #plt.imshow(mask2)
+    plt.imshow(np.log10(np.multiply(self._twoddata,np.multiply(-1,np.subtract(mask2,1)))))
+    plt.show()
+    
+    #mask2[int(self._com[0])-10:int(self._com[0])+20, int(self._com[1])-10: int(self._com[1])+20] = 1
+    #data_temp = np.multiply(self._twoddata, np.multiply(-1,np.subtract(mask2,1)))
+    #mask[300,409] = 1 #mask[398,388] = 1 # Works only for my PC at home
+    mask[666,388] = 1 
+    mask[764,409] = 1 
+    mask[1006,274] = 1 
+    #mask[:int(self._com[0])]=1 # Works only for my PC at home
+    mask[int(self._com[0])+1:]=1
+    #np.save('mask.npy', mask)
+    if self._VERBOSE:
+      plt.imshow(np.log10(np.multiply(self._twoddata,np.multiply(-1,np.subtract(mask,1)))))
+      plt.show()
+    return mask
   
+  def __init__(self, mask_type):
+    self.supported_types = {'saxans': self._saxans,'saxspace': self._saxspace}
+    if not(mask_type in supported_types.keys()):
+      error_message = 'Supported mask types are:'
+      for t in self.supported_types.keys:
+        error_message += ' {}'.format(t)
+      error_message += '.'
+      raise ValueError(error_message)
+    self.mask = self.supported_types[mask_type]
+
+class DataSet:
   def _load_data(self, fn):
     files = [join(fn,f) for f in listdir(fn) 
               if (isfile(join(fn,f))) and (f.endswith('.tif')) and not(f.endswith('corrected.tif'))]
@@ -47,7 +108,6 @@ class DataSet:
     return maximum*np.exp(exponent)
 
   def _find_direct_beam(self):
-
     xDB = 0
     yDB = 0
     
@@ -192,7 +252,124 @@ class DataSet:
     plt.loglog(self._oneddata[0], self._oneddata[1])
     plt.show()
 
-class Calibrator:
+class Workload:
+  def _init_setups(self, setup_file):
+    _setups = {}
+    if not(isfile(setup_file)):
+      raise ValueError('The chosen setup file does not exist.')
+    else:
+      _qualifiers = ['--setup-name', '--sample-detector-distance', '--calibration-factor', '--file-path']
+      with open(setup_file, 'r') as f:
+        for line in f:
+          if not(line.startswith('#')):
+            if line.startswith('!'):
+              line = line[1:]
+              _qualifiers = list(line.strip().split(','))
+            else:
+              _setups.update(self._parse_setup(_qualifiers, line))
+    return _setups
+              
+  def _parse_setup(self, qualifiers, line):
+    line = list(line.strip().split(','))
+    parsing_args = np.array(list(zip(qualifiers,line))).flatten()
+    
+    parser = argparse.ArgumentParser(description='Parses the setup inputs.')
+    
+    parser.add_argument('--setup-name', type=str, default ='placeholder setup')
+    parser.add_argument('--sample-detector-distance', type=float, default = 1)
+    parser.add_argument('--calibration-factor', type=float, default=1)
+    parser.add_argument('--file-path', type=str, default='./')
+    
+    args = parser.parse_args(parsing_args)
+    
+    return {args.setup_name: ['-sdd', '{}'.format(args.sample_detector_distance), '-cf', '{}'.format(args.calibration_factor), '-p', args.file_path]}
+  
+  def _init_workload(self, data_file):
+    _workload = {}
+    if not(isfile(data_file)):
+      raise ValueError('The chosen data file does not exist.')
+    else:
+      _qualifiers=['--sample-name', '--xdet', '--xstart', '--xend', '--gamma-start', '--gamma-end']
+      with open(data_file, 'r') as f:
+        for line in f:
+          if not(line.startswith('#')):
+            if line.startswith('!'):
+              line = line[1:]
+              _qualifiers = list(line.strip().split(','))
+            else:
+              new_workload = self._parse_workload(_qualifiers,line)
+              if not (0 in new_workload.keys()):
+                new_sample = list(new_workload.keys())[0]
+                if new_sample in _workload.keys():
+                  new_sample_name = self._iterate_sample_name(_workload.keys(), new_sample)
+                  _workload.update({new_sample_name: new_workload[new_sample]})
+                else:
+                  _workload.update(new_workload)
+    return _workload
+  
+  def _iterate_sample_name(self, keys, sample_name):
+    new_sample_name = sample_name
+    while new_sample_name in keys:
+      name_elements = new_sample_name.split('_')
+      number = int(name_elements[-1])
+      new_sample_name = '{}_{}_{:04d}'.format(name_elements[0], name_elements[1], number+1)
+    return new_sample_name
+  
+  def _parse_workload(self,qualifiers,line):
+    line = list(line.strip().split(','))
+    parsing_args = np.array(list(zip(qualifiers,line))).flatten()
+    
+    parser = argparse.ArgumentParser(description='Parses the data file input.')
+    
+    parser.add_argument('--sample-name', type=str, default='no-name-given')
+    parser.add_argument('--setup-name', type=str, default='no-name-given')
+    parser.add_argument('--xdet', type=float, default = -1)
+    parser.add_argument('--xstart', type=int, default = -1)
+    parser.add_argument('--xend', type=int, default = -1)
+    parser.add_argument('--gamma-start', type=int, default = -1)
+    parser.add_argument('--gamma-end', type=int, default = -1)
+    
+    args = parser.parse_args(parsing_args)
+    
+    if (args.xstart == -1 and args.xend == -1) or (args.xdet == -1):
+      print('Not enough input, skipping line: {}'.format(line))
+      return {0:0}
+    if (args.sample_name == 'no-name-given'):
+      if args.xstart == -1:
+        args.sample_name = '{}'.format(args.xend)
+      else:
+        args.sample_name = '{}'.format(args.xstart)
+    if (args.setup_name == 'no-name-given'):
+      args.setup_name = '{}'.format(int(args.xdet))
+    if args.xstart == -1:
+      args.xstart = args.xend
+    if args.xend == -1:
+      args.xend = args.xstart
+    
+    setup = self._setups[args.setup_name]
+    result = ['-xs', '{}'.format(args.xstart),
+              '-xe', '{}'.format(args.xend),] + setup
+    if not(args.gamma_start == -1 and args.gamma_end == -1):
+      if args.gamma_start == -1:
+        args.gamma_start == args.gamma_end
+      elif args.gamma_end ==-1:
+        args.gamma_end = args.gamma_start
+      result = result + ['-gs', '{}'.format(args.gamma_start),
+                         '-ge', '{}'.format(args.gamma_end)]
+      
+      return {'{}_{}_0001'.format(args.sample_name, args.setup_name): result}
+      
+  def __init__(self, setup_file, data_file):
+    self._setups = self._init_setups(setup_file)
+    self._workload = self._init_workload(data_file)
+    
+  def setups(self):
+    return self._setups
+
+  def workload(self):
+    return self._workload
+    
+class SAXSSpaceCalibrator:
   __DIST__ = 0.3075
   __CF__ = 14.5e7
  
@@ -258,8 +435,44 @@ class Calibrator:
     for d in self._datasets:
       d.plot_logcurve()
 
+class SAXANSCalibrator:
+  
+  def __init__(self):
+    pass
+
+class Worker:
+  
+  def _init_parameters(self, params):
+    
+    self._ALLOWED_TYPES = {'saxans':SAXANSCalibrator,
+                           'saxspace':SAXSSpaceCalibrator}
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('setup', type=str, help='File containing the setups that will be loaded.')
+    parser.add_argument('data', type=str, help='File containing the formatted data information.')
+    parser.add_argument('-v', '--verbose', type=bool, help='Display steps along the way.', default=False, const=True, nargs='?')
+    parser.add_argument('-t', '--type', type=str,
+                        help='Which SAXS data is to be refined.', 
+                        default = 'saxans',
+                        choices=list(self._ALLOWED_TYPES.keys()))
+    parser.add_argument('-o', '--output', type=str, default = './',
+                        help='Path were the outputs will be saved.')
+    
+    args = parser.parse_args(params)
+    self._SETUP = args.setup
+    self._DATA = args.data
+    self._VERBOSE = args.verbose
+    self._TYPE = args.type
+    self._OUTP = args.output
+  
+  def __init__(self, params):
+    self._init_parameters(params)
+    self.workload = Workload(self._SETUP, self._DATA)
+    
+    if self._VERBOSE:
+      print(self.workload.setups())
+      print(self.workload.workload())
 
 if __name__ == '__main__':
 
-  c = Calibrator(sys.argv[1:])
-  c.work()
+  c = Worker(sys.argv[1:])
