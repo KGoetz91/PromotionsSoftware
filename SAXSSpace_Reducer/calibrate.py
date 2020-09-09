@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 from PIL import Image
+import hdf5plugin
+import h5py
 
 from scipy.optimize import curve_fit as cfit
 
@@ -16,8 +18,21 @@ from scipy import ndimage
 
 import argparse
 
+def gaussian(x,x0,sigma,maximum):
+  dx = np.subtract(x,x0)
+  quotient = -2*sigma**2
+  exponent = np.divide(np.power(dx,2),quotient)
+  return maximum*np.exp(exponent)
+
 class Masks:
   def _saxans(self, data):
+    """Creates a numpy array to be used as mask in pyFAI.
+    
+    The numpy array contains 0 for pixels that will be used and
+    1 for pixels that are masked. The function automatically masks 
+    all pixels with counts lower than 0 and the 3 dead pixels in
+    the detector.
+    """
     mask = np.array(data)
     mask[mask >= 0] = 0 
     mask[mask < 0] = 1 
@@ -68,15 +83,15 @@ class Masks:
       plt.show()
     return mask
   
-  def __init__(self, mask_type):
+  def __init__(self, mask_type, data):
     self.supported_types = {'saxans': self._saxans,'saxspace': self._saxspace}
-    if not(mask_type in supported_types.keys()):
+    if not(mask_type in self.supported_types.keys()):
       error_message = 'Supported mask types are:'
       for t in self.supported_types.keys:
         error_message += ' {}'.format(t)
       error_message += '.'
       raise ValueError(error_message)
-    self.mask = self.supported_types[mask_type]
+    self.mask = self.supported_types[mask_type](data)
 
 class DataSet:
   def _load_data(self, fn):
@@ -289,7 +304,7 @@ class Workload:
     if not(isfile(data_file)):
       raise ValueError('The chosen data file does not exist.')
     else:
-      _qualifiers=['--sample-name', '--xdet', '--xstart', '--xend', '--gamma-start', '--gamma-end']
+      _qualifiers=['--sample-name', '--xdet', '--xstart', '--xend', '--gamma-start', '--gamma-end', '--integration-type']
       with open(data_file, 'r') as f:
         for line in f:
           if not(line.startswith('#')):
@@ -328,6 +343,7 @@ class Workload:
     parser.add_argument('--xend', type=int, default = -1)
     parser.add_argument('--gamma-start', type=int, default = -1)
     parser.add_argument('--gamma-end', type=int, default = -1)
+    parser.add_argument('--integration-type', type=str, default='each', choices=['each', 'mean'])
     
     args = parser.parse_args(parsing_args)
     
@@ -348,7 +364,8 @@ class Workload:
     
     setup = self._setups[args.setup_name]
     result = ['-xs', '{}'.format(args.xstart),
-              '-xe', '{}'.format(args.xend),] + setup
+              '-xe', '{}'.format(args.xend),
+              '-t', args.integration_type] + setup
     if not(args.gamma_start == -1 and args.gamma_end == -1):
       if args.gamma_start == -1:
         args.gamma_start == args.gamma_end
@@ -437,13 +454,157 @@ class SAXSSpaceCalibrator:
 
 class SAXANSCalibrator:
   
-  def __init__(self):
+  def _init_calibrator(self, name, params):
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('-xs', type=int)
+    parser.add_argument('-xe', type=int)
+    parser.add_argument('-gs', type=int)
+    parser.add_argument('-ge', type=int)
+    parser.add_argument('-sdd', type=float)
+    parser.add_argument('-cf', type=float)
+    parser.add_argument('-p', type=str)
+    parser.add_argument('-t', type=str)
+    parser.add_argument('-v', type=bool, default=False)
+    
+    args = parser.parse_args(params)
+    
+    self._NAME = name
+    self._XSTART = args.xs
+    self._XEND = args.xe
+    self._GSTART = args.gs
+    self._GEND = args.ge
+    self._SDD = args.sdd
+    self._CF = args.cf
+    self._PATH = args.p
+    self._VERBOSE = args.v
+    self._INTEGRATION_TYPE = args.t
+    self._CALIB = 'temp.poni'
+    
+  def _load_data(self, number):
+    full_path = join(self._PATH, '{:08d}.h5'.format(number))
+    if not isfile(full_path):
+      raise ValueError('The given file does not exist.')
+    with h5py.File(full_path) as f:
+      data = f['{:08d}/data/image'.format(number)][()]
+      xdet = float(f['{:08d}/instrument/xdet/value'.format(number)][()])
+      time = float(f['{:08d}/instrument/det/preset'.format(number)][()])
+    return data, xdet, time
+  
+  def _find_direct_beam(self):
+    xDB = 0
+    yDB = 0
+    
+    image,_,_ = self._load_data(self._XSTART)
+    
+    maxval = np.max(image)
+    maxcoord = np.where(image == maxval)
+    
+    xprojection = np.sum(image,1)
+    yprojection = np.sum(image,0)
+    maxvalx = np.max(xprojection)
+    maxvaly = np.max(yprojection)
+
+    p0 = [maxcoord[0][0],2,maxvalx]
+    x0 = list(range(len(xprojection)))
+    p1 = [maxcoord[1][0],2,maxvaly]
+    x1 = list(range(len(yprojection)))
+    
+    popt0, cov0 = cfit(gaussian, x0, xprojection, p0)
+    popt1, cov1 = cfit(gaussian, x1, yprojection, p1)
+    
+    if self._VERBOSE:
+      points = 10000
+      x0_plot = np.multiply(np.divide(list(range(points)),points),len(xprojection))
+      x1_plot = np.multiply(np.divide(list(range(points)),points),len(yprojection))
+      
+      plt.plot(xprojection, label='data')
+      plt.plot(x0_plot,gaussian(x0_plot,*p0),label='start value')
+      plt.plot(x0_plot,gaussian(x0_plot,*popt0), label='fit')
+      plt.xlim(maxcoord[0]-20,maxcoord[0]+20)
+      plt.legend()
+      plt.show()
+      plt.plot(yprojection, label='data')
+      plt.plot(x1_plot,gaussian(x1_plot,*p1),label='start value')
+      plt.plot(x1_plot,gaussian(x1_plot,*popt1), label='fit')
+      plt.xlim(maxcoord[1]-20,maxcoord[1]+20)
+      plt.legend()
+      plt.show()
+
+    xDB = popt0[0]
+    yDB = popt1[0]
+
+    return (xDB,yDB)
+  
+  def _calculate_gamma_background(self):
+    files = range(self._GSTART, self._GEND+1)
+    totalsum = 0 
+    totaltime = 0 
+    totalpixels = 0 
+
+    for number in files:
+      data, xdet, time = self._load_data(number)
+      mask = Masks('saxans', data)
+      
+      totalpixels += len(mask.mask[np.where(mask.mask==0)])
+      rev_mask = np.multiply(np.subtract(mask.mask,1),-1)
+      data = np.multiply(data, rev_mask)
+      
+      totaltime += time
+      totalsum += np.sum(data)
+
+    result = totalsum/(totaltime*totalpixels)
+    self._GAMMABG = result
+
+    if self._VERBOSE:
+      print('Sum: {}'.format(totalsum))
+      print('Time: {}'.format(totaltime))
+      print('Pixels: {}'.format(totalpixels))
+      print('Counts per pixel per second: {}'.format(result))
+  
+  def _write_poni(self):
+    with open(self._CALIB, 'w') as of:
+      of.write('#pyFAI Calibration file constructed manually\n')
+      of.write('#Created never...\n')
+      of.write('poni_version: 2\n')
+      of.write('Detector: Detector\n')
+      of.write('Detector_config: {"pixel1": 7.5e-5, "pixel2": 7.5e-5, "max_shape": null}\n')
+      of.write('Distance: {}\n'.format(self._SDD))
+      of.write('Poni1: {}\n'.format(self._COM[0]*7.5e-5))
+      of.write('Poni2: {}\n'.format(self._COM[1]*7.5e-5))
+      of.write('Rot1: 0\n')
+      of.write('Rot2: 0\n')
+      of.write('Rot3: 0\n')
+      of.write('Wavelength: 1.5406e-10\n')
+  
+  def _integrate_each(self):
+    result =[]
+    for number in range(self._XSTART,self._XEND+1):
+      
+    
+  def _integrate_mean(self):
     pass
+    
+  def _integrate_image(self, image):  
+    pass
+  
+  def __init__(self, name, params):
+    self._init_calibrator(name, params)
+    self._calculate_gamma_background()
+    self._COM = self._find_direct_beam()
+    self._write_poni()
+    
+  def integrate(self):
+    if self._INTEGRATION_TYPE == 'mean':
+      result = self._integrate_mean()
+    elif self._INTEGRATION_TYPE == 'each':
+      result = self._integrate_each()
+      
+    return result
 
 class Worker:
   
   def _init_parameters(self, params):
-    
     self._ALLOWED_TYPES = {'saxans':SAXANSCalibrator,
                            'saxspace':SAXSSpaceCalibrator}
     parser = argparse.ArgumentParser()
@@ -472,7 +633,13 @@ class Worker:
     if self._VERBOSE:
       print(self.workload.setups())
       print(self.workload.workload())
+  
+  def work(self):
+    for data in self.workload.workload().keys():
+      work = self.workload.workload()[data]+['-v',str(self._VERBOSE)]
+      integrator = SAXANSCalibrator(data, work)
 
 if __name__ == '__main__':
 
   c = Worker(sys.argv[1:])
+  c.work()

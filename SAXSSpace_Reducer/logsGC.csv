@@ -1,4 +1,4 @@
-#name,xdet,xraystart,xrayend,gammastart,gammaend
-GC,1090,27551,27555,27556,27560
-GC,100,27561,27565,27566,27570
-GC,0,27571,27575,27576,27580
+#name,xdet,xraystart,xrayend,gammastart,gammaend,integration_type
+GC,1090,27551,27555,27556,27560,mean
+GC,100,27561,27565,27566,27570,mean
+GC,0,27571,27575,27576,27580,mean
