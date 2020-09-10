@@ -330,10 +330,29 @@ class Workload:
       new_sample_name = '{}_{}_{:04d}'.format(name_elements[0], name_elements[1], number+1)
     return new_sample_name
   
+  def _clean_parsing_args(self,args):
+    args = list(args)
+    while('----' in args):
+      position = args.index('----')
+      args.pop(position)
+      args.pop(position-1)
+    while('' in args):
+      position = args.index('')
+      args.pop(position)
+      args.pop(position-1)
+    while('-' in args):
+      position = args.index('-')
+      args.pop(position)
+      args.pop(position-1)
+      
+    return np.array(args)
+  
   def _parse_workload(self,qualifiers,line):
     line = list(line.strip().split(','))
     parsing_args = np.array(list(zip(qualifiers,line))).flatten()
+    parsing_args = self._clean_parsing_args(parsing_args)
     
+    print(parsing_args)
     parser = argparse.ArgumentParser(description='Parses the data file input.')
     
     parser.add_argument('--sample-name', type=str, default='no-name-given')
@@ -374,7 +393,7 @@ class Workload:
       result = result + ['-gs', '{}'.format(args.gamma_start),
                          '-ge', '{}'.format(args.gamma_end)]
       
-      return {'{}_{}_0001'.format(args.sample_name, args.setup_name): result}
+    return {'{}_{}_0001'.format(args.sample_name, args.setup_name): result}
       
   def __init__(self, setup_file, data_file):
     self._setups = self._init_setups(setup_file)
@@ -453,17 +472,17 @@ class SAXSSpaceCalibrator:
       d.plot_logcurve()
 
 class SAXANSCalibrator:
-  
   def _init_calibrator(self, name, params):
     parser = argparse.ArgumentParser()
     
     parser.add_argument('-xs', type=int)
     parser.add_argument('-xe', type=int)
-    parser.add_argument('-gs', type=int)
-    parser.add_argument('-ge', type=int)
+    parser.add_argument('-gs', type=int,default=-1)
+    parser.add_argument('-ge', type=int,default=-1)
     parser.add_argument('-sdd', type=float)
     parser.add_argument('-cf', type=float)
     parser.add_argument('-p', type=str)
+    parser.add_argument('-o', type=str)
     parser.add_argument('-t', type=str)
     parser.add_argument('-v', type=bool, default=False)
     
@@ -480,6 +499,7 @@ class SAXANSCalibrator:
     self._VERBOSE = args.v
     self._INTEGRATION_TYPE = args.t
     self._CALIB = 'temp.poni'
+    self._OUTP = args.o
     
   def _load_data(self, number):
     full_path = join(self._PATH, '{:08d}.h5'.format(number))
@@ -495,7 +515,12 @@ class SAXANSCalibrator:
     xDB = 0
     yDB = 0
     
-    image,_,_ = self._load_data(self._XSTART)
+    image,xdet,time = self._load_data(self._XSTART)
+    
+    if self._VERBOSE:
+      plt.imshow(np.log(image))
+      plt.show()
+      plt.clf()
     
     maxval = np.max(image)
     maxcoord = np.where(image == maxval)
@@ -530,31 +555,46 @@ class SAXANSCalibrator:
       plt.xlim(maxcoord[1]-20,maxcoord[1]+20)
       plt.legend()
       plt.show()
+      
+      plt.clf()
+      plt.imshow(np.log(image))
+      print('{} {}'.format(popt0[0],popt1[0]))
+      plt.scatter(popt1[0],popt0[0],c='red', marker='x')
+      plt.show()
 
     xDB = popt0[0]
     yDB = popt1[0]
+    
 
     return (xDB,yDB)
   
   def _calculate_gamma_background(self):
-    files = range(self._GSTART, self._GEND+1)
-    totalsum = 0 
-    totaltime = 0 
-    totalpixels = 0 
+    if self._GSTART==-1 and self._GEND==-1:
+      self._GAMMABG=0
+    else:
+      if self._GSTART==-1:
+        self._GSTART=self._GEND
+      elif self._GEND==-1:
+        self._GEND=self._GSTART
+        
+      files = range(self._GSTART, self._GEND+1)
+      totalsum = 0 
+      totaltime = 0 
+      totalpixels = 0 
 
-    for number in files:
-      data, xdet, time = self._load_data(number)
-      mask = Masks('saxans', data)
-      
-      totalpixels += len(mask.mask[np.where(mask.mask==0)])
-      rev_mask = np.multiply(np.subtract(mask.mask,1),-1)
-      data = np.multiply(data, rev_mask)
-      
-      totaltime += time
-      totalsum += np.sum(data)
+      for number in files:
+        data, xdet, time = self._load_data(number)
+        mask = Masks('saxans', data)
+        
+        totalpixels += len(mask.mask[np.where(mask.mask==0)])
+        rev_mask = np.multiply(np.subtract(mask.mask,1),-1)
+        data = np.multiply(data, rev_mask)
+        
+        totaltime += time
+        totalsum += np.sum(data)
 
-    result = totalsum/(totaltime*totalpixels)
-    self._GAMMABG = result
+      result = totalsum/(totaltime*totalpixels)
+      self._GAMMABG = result
 
     if self._VERBOSE:
       print('Sum: {}'.format(totalsum))
@@ -580,13 +620,65 @@ class SAXANSCalibrator:
   def _integrate_each(self):
     result =[]
     for number in range(self._XSTART,self._XEND+1):
+      data,xdet,time = self._load_data(number)
       
+      mask = Masks('saxans', data).mask
+      rev_mask = np.multiply(np.subtract(mask,1),-1)
+      
+      transmitted_intensity = np.sum(np.multiply(data,rev_mask))
+      thickness = np.sqrt(2) #TODO Add a way to define this in config file
+      
+      data = np.subtract(data, self._GAMMABG*time)
+      data = np.divide(data,thickness*transmitted_intensity)
+      data = np.multiply(data,self._CF)
+      
+      name = '{}_{:08d}'.format(self._NAME,number)
+      output = join(self._OUTP,name)
+      result.append(self._integrate_image(data,mask,output))
+    return result
     
   def _integrate_mean(self):
-    pass
+    result = 0
+    sumdata = 0
+    totaltime = 0
     
-  def _integrate_image(self, image):  
-    pass
+    for number in range(self._XSTART,self._XEND+1):
+      data,xdet,time = self._load_data(number)
+      totaltime += time
+      if number == self._XSTART:
+        sumdata=data
+      else:
+        sumdata = np.add(sumdata,data)
+    
+    mask = Masks('saxans',sumdata).mask
+    rev_mask = np.multiply(np.subtract(mask,1),-1)
+    
+    transmitted_intensity = np.sum(np.multiply(sumdata,rev_mask))
+    thickness = np.sqrt(2) #TODO Add a way to define this in config file
+    
+    sumdata = np.subtract(sumdata, self._GAMMABG*totaltime)
+    sumdata = np.divide(sumdata,thickness*transmitted_intensity)
+    sumdata = np.multiply(sumdata,self._CF)
+    
+    if self._VERBOSE:
+      plt.imshow(np.log(sumdata))
+      plt.scatter(self._COM[1],self._COM[0],c='red', marker='x')
+      plt.show()
+    
+    name = '{}_mean'.format(self._NAME)
+    output = join(self._OUTP, name)
+    result = self._integrate_image(sumdata,mask,output)
+    
+  def _integrate_image(self, image, mask, outp):  
+    ai = pyFAI.load(self._CALIB)
+    #TODO Implement way to put bins into config
+    res1000 = ai.integrate1d(image, 1000, unit='q_A^-1', mask = mask, 
+                         filename='{}_1000bins.dat'.format(outp), error_model = 'poisson')
+    res = ai.integrate1d(image, 100, unit='q_A^-1', mask = mask, 
+                         filename='{}_100bins.dat'.format(outp), error_model = 'poisson')
+    res = ai.integrate1d(image, 200, unit='q_A^-1', mask = mask,
+                         filename='{}_200bins.dat'.format(outp), error_model = 'poisson')
+    return res1000
   
   def __init__(self, name, params):
     self._init_calibrator(name, params)
@@ -603,7 +695,6 @@ class SAXANSCalibrator:
     return result
 
 class Worker:
-  
   def _init_parameters(self, params):
     self._ALLOWED_TYPES = {'saxans':SAXANSCalibrator,
                            'saxspace':SAXSSpaceCalibrator}
@@ -636,8 +727,9 @@ class Worker:
   
   def work(self):
     for data in self.workload.workload().keys():
-      work = self.workload.workload()[data]+['-v',str(self._VERBOSE)]
+      work = self.workload.workload()[data]+['-v',self._VERBOSE, '-o', self._OUTP]
       integrator = SAXANSCalibrator(data, work)
+      result = integrator.integrate()
 
 if __name__ == '__main__':
 
