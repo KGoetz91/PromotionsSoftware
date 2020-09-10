@@ -92,6 +92,21 @@ class Masks:
       error_message += '.'
       raise ValueError(error_message)
     self.mask = self.supported_types[mask_type](data)
+    
+  def mask_outside_circle(self,com,radius):
+    new_mask = self.mask
+    x,y = self.mask.shape
+    x_range = np.array(range(x))
+    y_range = np.array(range(y))
+    
+    for x in x_range:
+      for y in y_range:
+        dx = x-com[0]
+        dy = y-com[1]
+        if dx*dx + dy*dy > radius*radius:
+          new_mask[x][y]=1
+          
+    return new_mask
 
 class DataSet:
   def _load_data(self, fn):
@@ -273,7 +288,7 @@ class Workload:
     if not(isfile(setup_file)):
       raise ValueError('The chosen setup file does not exist.')
     else:
-      _qualifiers = ['--setup-name', '--sample-detector-distance', '--calibration-factor', '--file-path']
+      _qualifiers = ['--setup-name', '--sample-detector-distance', '--calibration-factor', '--file-path', '--mask-radius', '--mask-shift-y', '--mask-shift-x']
       with open(setup_file, 'r') as f:
         for line in f:
           if not(line.startswith('#')):
@@ -294,10 +309,16 @@ class Workload:
     parser.add_argument('--sample-detector-distance', type=float, default = 1)
     parser.add_argument('--calibration-factor', type=float, default=1)
     parser.add_argument('--file-path', type=str, default='./')
-    
+    parser.add_argument('--mask-radius', type=int)
+    parser.add_argument('--mask-shift-x', type=int, default=0)
+    parser.add_argument('--mask-shift-y', type=int, default=0)
+      
     args = parser.parse_args(parsing_args)
     
-    return {args.setup_name: ['-sdd', '{}'.format(args.sample_detector_distance), '-cf', '{}'.format(args.calibration_factor), '-p', args.file_path]}
+    result = ['-sdd', '{}'.format(args.sample_detector_distance), '-cf', '{}'.format(args.calibration_factor), '-p', args.file_path, '-msx', '{}'.format(args.mask_shift_x), '-msy', '{}'.format(args.mask_shift_y)]
+    if args.mask_radius:
+      result = result+['-r', '{}'.format(args.mask_radius)]
+    return {args.setup_name: result}
   
   def _init_workload(self, data_file):
     _workload = {}
@@ -484,7 +505,10 @@ class SAXANSCalibrator:
     parser.add_argument('-p', type=str)
     parser.add_argument('-o', type=str)
     parser.add_argument('-t', type=str)
-    parser.add_argument('-v', type=bool, default=False)
+    parser.add_argument('-v', type=str, default='False', choices=['False', 'True'])
+    parser.add_argument('-r', type=int)
+    parser.add_argument('-msx', type=int)
+    parser.add_argument('-msy', type=int)
     
     args = parser.parse_args(params)
     
@@ -496,10 +520,13 @@ class SAXANSCalibrator:
     self._SDD = args.sdd
     self._CF = args.cf
     self._PATH = args.p
-    self._VERBOSE = args.v
+    self._VERBOSE = bool(args.v)
     self._INTEGRATION_TYPE = args.t
     self._CALIB = 'temp.poni'
     self._OUTP = args.o
+    self._MASK_RADIUS = args.r
+    self._MASK_SHIFT_X = args.msx
+    self._MASK_SHIFT_Y = args.msy
     
   def _load_data(self, number):
     full_path = join(self._PATH, '{:08d}.h5'.format(number))
@@ -584,10 +611,10 @@ class SAXANSCalibrator:
 
       for number in files:
         data, xdet, time = self._load_data(number)
-        mask = Masks('saxans', data)
         
-        totalpixels += len(mask.mask[np.where(mask.mask==0)])
-        rev_mask = np.multiply(np.subtract(mask.mask,1),-1)
+        mask = self._create_mask(data)
+        totalpixels += len(mask[np.where(mask==0)])
+        rev_mask = np.multiply(np.subtract(mask,1),-1)
         data = np.multiply(data, rev_mask)
         
         totaltime += time
@@ -617,12 +644,22 @@ class SAXANSCalibrator:
       of.write('Rot3: 0\n')
       of.write('Wavelength: 1.5406e-10\n')
   
+  def _create_mask(self, data):
+    mask = Masks('saxans', data)
+    center = (self._COM[1]+self._MASK_SHIFT_Y,self._COM[0]+self._MASK_SHIFT_X)
+    if self._MASK_RADIUS:
+      mask = mask.mask_outside_circle(center,self._MASK_RADIUS)
+    else:
+      mask = mask.mask
+    
+    return mask
+  
   def _integrate_each(self):
     result =[]
     for number in range(self._XSTART,self._XEND+1):
       data,xdet,time = self._load_data(number)
       
-      mask = Masks('saxans', data).mask
+      mask = self._create_mask(data)
       rev_mask = np.multiply(np.subtract(mask,1),-1)
       
       transmitted_intensity = np.sum(np.multiply(data,rev_mask))
@@ -650,7 +687,7 @@ class SAXANSCalibrator:
       else:
         sumdata = np.add(sumdata,data)
     
-    mask = Masks('saxans',sumdata).mask
+    mask = self._create_mask(data)
     rev_mask = np.multiply(np.subtract(mask,1),-1)
     
     transmitted_intensity = np.sum(np.multiply(sumdata,rev_mask))
@@ -663,6 +700,9 @@ class SAXANSCalibrator:
     if self._VERBOSE:
       plt.imshow(np.log(sumdata))
       plt.scatter(self._COM[1],self._COM[0],c='red', marker='x')
+      plt.show()
+      plt.clf()
+      plt.imshow(np.log(np.multiply(sumdata,rev_mask)))
       plt.show()
     
     name = '{}_mean'.format(self._NAME)
@@ -682,8 +722,8 @@ class SAXANSCalibrator:
   
   def __init__(self, name, params):
     self._init_calibrator(name, params)
-    self._calculate_gamma_background()
     self._COM = self._find_direct_beam()
+    self._calculate_gamma_background()
     self._write_poni()
     
   def integrate(self):
@@ -727,7 +767,7 @@ class Worker:
   
   def work(self):
     for data in self.workload.workload().keys():
-      work = self.workload.workload()[data]+['-v',self._VERBOSE, '-o', self._OUTP]
+      work = self.workload.workload()[data]+['-v',str(self._VERBOSE), '-o', self._OUTP]
       integrator = SAXANSCalibrator(data, work)
       result = integrator.integrate()
 
