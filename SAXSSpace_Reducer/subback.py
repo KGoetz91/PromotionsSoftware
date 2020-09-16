@@ -59,7 +59,6 @@ def lin_interpolate(x1,y1,e1,x2,y2,e2,x_det):
   return x_det,ydet,edet
 
 def spline_data(x0, data):
-  
   x1 = np.array(data[0])
   y1 = np.array(data[1])
   e1 = np.array(data[2])

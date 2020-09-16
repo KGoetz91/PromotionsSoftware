@@ -3,9 +3,9 @@
 poni_version: 2
 Detector: Detector
 Detector_config: {"pixel1": 7.5e-5, "pixel2": 7.5e-5, "max_shape": null}
-Distance: 0.56076
-Poni1: 0.05009092272801286
-Poni2: 0.0518116854972076
+Distance: 1.6413
+Poni1: 0.05060796478957619
+Poni2: 0.050550490976136196
 Rot1: 0
 Rot2: 0
 Rot3: 0

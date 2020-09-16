@@ -5,6 +5,7 @@ import hdf5plugin
 import h5py
 
 from scipy.optimize import curve_fit as cfit
+from distutils.util import strtobool
 
 import pyFAI
 
@@ -312,10 +313,11 @@ class Workload:
     parser.add_argument('--mask-radius', type=int)
     parser.add_argument('--mask-shift-x', type=int, default=0)
     parser.add_argument('--mask-shift-y', type=int, default=0)
+    parser.add_argument('--empty-beam', type=int, default=-1)
       
     args = parser.parse_args(parsing_args)
     
-    result = ['-sdd', '{}'.format(args.sample_detector_distance), '-cf', '{}'.format(args.calibration_factor), '-p', args.file_path, '-msx', '{}'.format(args.mask_shift_x), '-msy', '{}'.format(args.mask_shift_y)]
+    result = ['-sdd', '{}'.format(args.sample_detector_distance), '-cf', '{}'.format(args.calibration_factor), '-p', args.file_path, '-msx', '{}'.format(args.mask_shift_x), '-msy', '{}'.format(args.mask_shift_y), '-eb', '{}'.format(args.empty_beam)]
     if args.mask_radius:
       result = result+['-r', '{}'.format(args.mask_radius)]
     return {args.setup_name: result}
@@ -373,7 +375,7 @@ class Workload:
     parsing_args = np.array(list(zip(qualifiers,line))).flatten()
     parsing_args = self._clean_parsing_args(parsing_args)
     
-    print(parsing_args)
+    #print(parsing_args)
     parser = argparse.ArgumentParser(description='Parses the data file input.')
     
     parser.add_argument('--sample-name', type=str, default='no-name-given')
@@ -509,6 +511,7 @@ class SAXANSCalibrator:
     parser.add_argument('-r', type=int)
     parser.add_argument('-msx', type=int)
     parser.add_argument('-msy', type=int)
+    parser.add_argument('-eb', type=int)
     
     args = parser.parse_args(params)
     
@@ -518,16 +521,27 @@ class SAXANSCalibrator:
     self._GSTART = args.gs
     self._GEND = args.ge
     self._SDD = args.sdd
+    self._SOLID_ANGLE = 75e-6*75e-6/(self._SDD*self._SDD)
     self._CF = args.cf
     self._PATH = args.p
-    self._VERBOSE = bool(args.v)
+    self._VERBOSE = strtobool(args.v)
     self._INTEGRATION_TYPE = args.t
     self._CALIB = 'temp.poni'
     self._OUTP = args.o
     self._MASK_RADIUS = args.r
     self._MASK_SHIFT_X = args.msx
     self._MASK_SHIFT_Y = args.msy
+    self._COM = self._find_direct_beam()
+    if args.eb == -1:
+      self._EB_FLUX = None
+    else:
+      self._EB_FLUX = self._calculate_flux(args.eb)
     
+  def _calculate_flux(self,number):
+    data,xdet,time = self._load_data(number)
+    mask = self._create_mask(data)
+    return np.sum(np.multiply(data,np.multiply(np.subtract(mask,1),-1)))/time
+  
   def _load_data(self, number):
     full_path = join(self._PATH, '{:08d}.h5'.format(number))
     if not isfile(full_path):
@@ -646,8 +660,8 @@ class SAXANSCalibrator:
   
   def _create_mask(self, data):
     mask = Masks('saxans', data)
-    center = (self._COM[1]+self._MASK_SHIFT_Y,self._COM[0]+self._MASK_SHIFT_X)
     if self._MASK_RADIUS:
+      center = (self._COM[1]+self._MASK_SHIFT_Y,self._COM[0]+self._MASK_SHIFT_X)
       mask = mask.mask_outside_circle(center,self._MASK_RADIUS)
     else:
       mask = mask.mask
@@ -666,7 +680,7 @@ class SAXANSCalibrator:
       thickness = np.sqrt(2) #TODO Add a way to define this in config file
       
       data = np.subtract(data, self._GAMMABG*time)
-      data = np.divide(data,thickness*transmitted_intensity)
+      data = np.divide(data,thickness*transmitted_intensity*self._SOLID_ANGLE)
       data = np.multiply(data,self._CF)
       
       name = '{}_{:08d}'.format(self._NAME,number)
@@ -694,7 +708,7 @@ class SAXANSCalibrator:
     thickness = np.sqrt(2) #TODO Add a way to define this in config file
     
     sumdata = np.subtract(sumdata, self._GAMMABG*totaltime)
-    sumdata = np.divide(sumdata,thickness*transmitted_intensity)
+    sumdata = np.divide(sumdata,thickness*transmitted_intensity*self._SOLID_ANGLE)
     sumdata = np.multiply(sumdata,self._CF)
     
     if self._VERBOSE:
@@ -722,17 +736,26 @@ class SAXANSCalibrator:
   
   def __init__(self, name, params):
     self._init_calibrator(name, params)
-    self._COM = self._find_direct_beam()
     self._calculate_gamma_background()
     self._write_poni()
     
   def integrate(self):
+    self.print_info()
     if self._INTEGRATION_TYPE == 'mean':
       result = self._integrate_mean()
     elif self._INTEGRATION_TYPE == 'each':
       result = self._integrate_each()
       
     return result
+  
+  def print_info(self):
+    text = 'Reducing sample {}:\n'.format(self._NAME)
+    if self._EB_FLUX:
+      text += 'Transmission: {}'.format(self._calculate_flux(self._XSTART)/self._EB_FLUX)
+    else:
+      text += 'No empty beam, Transmission calculation not possible.'
+    
+    print(text)
 
 class Worker:
   def _init_parameters(self, params):
