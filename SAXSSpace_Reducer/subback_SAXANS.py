@@ -20,14 +20,18 @@ def load_data(fn):
 
   with open(fn, 'r') as f:
     for line in f:
-      if not line.startswith('#'):
-        x,y,e = line.split()
-        xs.append(float(x))
-        ys.append(float(y))
-        es.append(float(e))
+      try:
+        if not line.startswith('#'):
+          data = list(line.split())
+          xs.append(float(data[0]))
+          ys.append(float(data[1]))
+          es.append(float(data[2]))
+      except:
+        #print('Skipping line: {}'.format(line))
+        pass
 
   result = np.array([xs,ys,es])
-
+  print(result)
   return result
 
 def lin_interpolate(x1,y1,e1,x2,y2,e2,x_det):
@@ -122,7 +126,9 @@ if __name__ == '__main__':
     outp = '{}_{}.dat'.format(fn[:-4],args.o) 
     print(outp)
     data = load_data(fn)
+    print(data)
     bgspline = spline_data(data[0], bgdata)
+    print('debug2')
     
     result = subtract(bgspline, data, args.f)
     result_transp = np.transpose(np.array(result))
