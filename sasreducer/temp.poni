@@ -2,7 +2,7 @@
 #Created never...
 poni_version: 2
 Detector: Detector
-Detector_config: {"pixel1": 7.5e-5, "pixel2": 7.5e-5, "max_shape": null}
+Detector_config:{"pixel1": 7.5e-5, "pixel2": 7.5e-5, "max_shape": null}
 Distance: 0.556827
 Poni1: 0.05862483525936394
 Poni2: 0.05655752355461444

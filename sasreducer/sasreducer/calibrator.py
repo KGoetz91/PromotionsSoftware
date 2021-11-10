@@ -1,4 +1,11 @@
-#
+##############################################################
+#Calibrator class handling the actual processing of          #
+#2D scattering data.                                         #
+#Author: Klaus Götz                                          #
+#E-Mail: kgoetz91@t-online.de                                #
+#License: GPL-3.0                                            #
+#09. November 2021                                           #
+##############################################################
 
 import argparse
 from distutils.util import strtobool
@@ -16,7 +23,50 @@ from scipy.optimize import curve_fit as cfit
 from .helper_functions import gaussian
 from .masks import Masks
 
-class SAXANSCalibrator:
+class Calibrator:
+  
+  def __init__(self):
+    pass
+
+  def _integrate_image(self, image, mask, outp):  
+    ai = pyFAI.load(self._CALIB)
+    #TODO Implement way to put bins into config
+    res1000 = ai.integrate1d(image, 1000, unit='q_A^-1', mask = mask, 
+                         filename='{}_1000bins.dat'.format(outp), error_model = 'poisson')
+    res = ai.integrate1d(image, 100, unit='q_A^-1', mask = mask, 
+                         filename='{}_100bins.dat'.format(outp), error_model = 'poisson')
+    res = ai.integrate1d(image, 200, unit='q_A^-1', mask = mask,
+                         filename='{}_200bins.dat'.format(outp), error_model = 'poisson')
+    return res1000
+
+  def _write_poni(self,pixel_size, wavelength):
+    """Writes the .poni files needed py the PyFAI library for integration.
+    
+    pixel_size: size of the detector pixels. Needs to be given in [m] as a string.
+    wavelength: wavelength of the used x-rays. Needs to be given in [Angström] as float or string.
+    """
+    with open(self._CALIB, 'w') as of:
+      of.write('#pyFAI Calibration file constructed manually\n')
+      of.write('#Created never...\n')
+      of.write('poni_version: 2\n')
+      of.write('Detector: Detector\n')
+      of.write('Detector_config:{{\"pixel1\": {0}, \"pixel2\": {0}, \"max_shape\": null}}\n'.format(pixel_size))
+      of.write('Distance: {}\n'.format(self._SDD))
+      of.write('Poni1: {}\n'.format(self._COM[0]*float(pixel_size)))
+      of.write('Poni2: {}\n'.format(self._COM[1]*float(pixel_size)))
+      of.write('Rot1: 0\n')
+      of.write('Rot2: 0\n')
+      of.write('Rot3: 0\n')
+      of.write('Wavelength: {}e-10\n'.format(wavelength))
+  
+
+class SAXANSCalibrator(Calibrator):
+  
+  def _write_poni(self):
+    pixel_size = "7.5e-5"
+    wavelength = "1.5406"
+    super()._write_poni(pixel_size, wavelength)
+    
   def _init_calibrator(self, name, params):
     parser = argparse.ArgumentParser()
     
@@ -175,21 +225,6 @@ class SAXANSCalibrator:
       print('Pixels: {}'.format(totalpixels))
       print('Counts per pixel per second: {}'.format(result))
   
-  def _write_poni(self):
-    with open(self._CALIB, 'w') as of:
-      of.write('#pyFAI Calibration file constructed manually\n')
-      of.write('#Created never...\n')
-      of.write('poni_version: 2\n')
-      of.write('Detector: Detector\n')
-      of.write('Detector_config: {"pixel1": 7.5e-5, "pixel2": 7.5e-5, "max_shape": null}\n')
-      of.write('Distance: {}\n'.format(self._SDD))
-      of.write('Poni1: {}\n'.format(self._COM[0]*7.5e-5))
-      of.write('Poni2: {}\n'.format(self._COM[1]*7.5e-5))
-      of.write('Rot1: 0\n')
-      of.write('Rot2: 0\n')
-      of.write('Rot3: 0\n')
-      of.write('Wavelength: 1.5406e-10\n')
-  
   def _create_mask(self, data):
     mask = Masks('saxans', data)
     if self._MASK_RADIUS:
@@ -255,18 +290,8 @@ class SAXANSCalibrator:
     output = join(self._OUTP, name)
     result = self._integrate_image(sumdata,mask,output)
     
-  def _integrate_image(self, image, mask, outp):  
-    ai = pyFAI.load(self._CALIB)
-    #TODO Implement way to put bins into config
-    res1000 = ai.integrate1d(image, 1000, unit='q_A^-1', mask = mask, 
-                         filename='{}_1000bins.dat'.format(outp), error_model = 'poisson')
-    res = ai.integrate1d(image, 100, unit='q_A^-1', mask = mask, 
-                         filename='{}_100bins.dat'.format(outp), error_model = 'poisson')
-    res = ai.integrate1d(image, 200, unit='q_A^-1', mask = mask,
-                         filename='{}_200bins.dat'.format(outp), error_model = 'poisson')
-    return res1000
-  
   def __init__(self, name, params):
+    super().__init__()
     self._init_calibrator(name, params)
     self._calculate_gamma_background()
     self._write_poni()
