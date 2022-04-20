@@ -98,26 +98,55 @@ class XRRFourier:
   def calculate_fourier(self, xrrdata):
     q = xrrdata[0]
     N = len(xrrdata[0])
+    print(N)
     
-    linear_qs = np.linspace(q[0],q[-1],N)
+    linear_qs = np.linspace(q[0],q[-1],6*N)
     linear_data = self.spline_data(linear_qs, xrrdata)
     sample_spacing = linear_data[0][1]-linear_data[0][0]
+    #sample_spacing = xrrdata[1][-1]-xrrdata[1][-2]
+    #sample_spacing = xrrdata[0][1]-xrrdata[0][0]
+    #sample_spacing = xrrdata[0][-1]-xrrdata[0][-2]
     
-    normal_fourier = fft(linear_data[1])
-    blackman_fourier = fft(np.array(linear_data[1])*blackman(N))
-    frequencies = fftfreq(N, sample_spacing)[:N//2]
-    
-    plt.plot(frequencies[1:N//2], 2.0/N * np.abs(normal_fourier[1:N//2]), label="normal")
-    plt.plot(frequencies[1:N//2], 2.0/N * np.abs(blackman_fourier[1:N//2]), label="blackman")
+    plt.scatter(linear_qs, np.log10(linear_data[1]))
+    plt.scatter(q, np.log10(xrrdata[1]), label='original')
     plt.legend()
     plt.show()
-    plt.clf()
+    
+    normal_fourier = fft(linear_data[1])
+    #normal_fourier = fft(xrrdata[1])
+    #blackman_fourier = fft(np.array(linear_data[1])*blackman(N))
+    frequencies = fftfreq(6*N, sample_spacing)[:N//2]
+    #frequencies = fftfreq(N, 1)[:N//2]
+    
+    #plt.plot(frequencies[1:N//2], 2.0/N * np.abs(normal_fourier[1:N//2]), label="normal")
+    #plt.plot(frequencies[1:N//2], 2.0/N * np.abs(blackman_fourier[1:N//2]), label="blackman")
+    #plt.legend()
+    #plt.show()
+    #plt.clf()
+    
+    return (np.array(frequencies[1:N//2]), 2.0/N * np.abs(normal_fourier[1:N//2]))
     
     
 
   def __init__(self, filename):
     self._XRRDATA = self.load_XRRdata(filename)
+    start = 14
+    end = -1
+    self._XRRDATA = (self._XRRDATA[0][start:end], 1e8*np.multiply(self._XRRDATA[1][start:end],np.power(self._XRRDATA[0][start:end],4)),self._XRRDATA[2][start:end])
     self._FOURIERDATA = self.calculate_fourier(self._XRRDATA)
+  
+  def plot_data(self):
+    ax1 = plt.subplot(121)
+    ax2 = plt.subplot(122)
+    
+    #back_trafo = self.calculate_fourier((self._FOURIERDATA[0], self._FOURIERDATA[1], np.sqrt(self._FOURIERDATA[1])))
+    ax1.semilogy(self._XRRDATA[0], self._XRRDATA[1], label = 'XRR Data')
+    #ax1.plot(back_trafo[0], back_trafo[1], label = 'Rücktrafo')
+    ax2.plot(self._FOURIERDATA[0], self._FOURIERDATA[1], label = 'FFT')
+    
+    ax1.legend()
+    ax2.legend()
+    plt.show()
   
   def test(self):
     data = create_sinus()

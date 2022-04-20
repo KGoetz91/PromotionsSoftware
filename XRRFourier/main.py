@@ -6,4 +6,5 @@ if __name__ == '__main__':
   
   filename = '/home/klaus/Documents/DESYSeptember21Vorbereitung/Daten/processed/reductions_211110/W9_emptyCell_cor_262.dat'
   fourier_data = trafo(filename)
-  fourier_data.test()
+  fourier_data.plot_data()
+  #fourier_data.test()
